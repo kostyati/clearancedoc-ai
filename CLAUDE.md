@@ -87,8 +87,8 @@ clearancedoc-ai/
 ## Build plan (14 days)
 
 ### Week 1 — Backend
-- Day 1: Project setup, Docker skeleton, FastAPI health endpoint ✅ STARTED
-- Day 2: PDF processing (PyMuPDF + OCR fallback)
+- Day 1: Project setup, Docker skeleton, FastAPI health endpoint ✅ DONE
+- Day 2: PDF processing (PyMuPDF + OCR fallback) ✅ DONE
 - Day 3: Chunking + embedding + ChromaDB storage
 - Day 4: RAG retrieval + LLM generation with citations
 - Day 5: Polish API endpoints, error handling
@@ -124,4 +124,4 @@ First launch shows a model settings screen:
 - Commit messages should be descriptive, not "update files"
 
 ## Current status
-Day 1 in progress. Backend skeleton with FastAPI, routers (documents, chat, settings), Pydantic schemas, and config are created. Frontend structure started. Docker setup next.
+Day 2 complete. `services/pdf_processor.py` extracts text per-page via PyMuPDF and falls back to Tesseract OCR (rendering the page to an image) when a page has under 20 characters of native text. `routers/documents.py` wires this into `POST /documents`: saves the upload to `settings.upload_dir`, extracts text, and returns `status=ready` with `page_count`, or `status=error` for corrupted/unreadable PDFs. Documents and extracted page text are held in an in-memory dict for now — TODO(Day 3): replace with ChromaDB-backed storage after chunking/embedding. Tests in `tests/test_pdf_processor.py` cover native-text extraction, corrupted files, and the OCR fallback path.
