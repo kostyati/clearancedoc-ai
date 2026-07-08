@@ -8,20 +8,22 @@ from fastapi import APIRouter, HTTPException, UploadFile
 
 from config import get_settings
 from models.schemas import DocumentResponse, DocumentStatus
+from services import retriever
+from services.chunker import chunk_pages
+from services.embedder import embed_texts
 from services.pdf_processor import PDFProcessingError, extract_text
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
-# TODO(Day 3): replace this in-memory store with ChromaDB-backed metadata + chunks.
+# TODO(Day 4): replace this in-memory store with a persistent metadata store.
 _documents: dict[str, DocumentResponse] = {}
-_document_pages: dict[str, list[str]] = {}
 
 
 @router.post("", response_model=DocumentResponse)
 async def upload_document(file: UploadFile) -> DocumentResponse:
     """Upload a PDF, extract its text (with OCR fallback), and persist it to disk.
 
-    TODO(Day 3): chunk extracted pages, embed, and store in ChromaDB.
+    Extracted pages are chunked, embedded, and stored in ChromaDB for retrieval.
     """
     if file.content_type != "application/pdf":
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
@@ -47,7 +49,10 @@ async def upload_document(file: UploadFile) -> DocumentResponse:
         _documents[document_id] = document
         return document
 
-    _document_pages[document_id] = [page.text for page in processed.pages]
+    chunks = chunk_pages(processed.pages, settings.chunk_size, settings.chunk_overlap)
+    embeddings = embed_texts([chunk.text for chunk in chunks])
+    retriever.add_chunks(document_id, chunks, embeddings)
+
     document = DocumentResponse(
         id=document_id,
         filename=file.filename or "unknown.pdf",
@@ -67,12 +72,9 @@ async def list_documents() -> list[DocumentResponse]:
 
 @router.delete("/{document_id}")
 async def delete_document(document_id: str) -> dict[str, str]:
-    """Delete a document, its extracted pages, and its file on disk.
-
-    TODO(Day 3): also remove its ChromaDB embeddings.
-    """
+    """Delete a document, its ChromaDB chunks, and its file on disk."""
     _documents.pop(document_id, None)
-    _document_pages.pop(document_id, None)
+    retriever.delete_document(document_id)
 
     settings = get_settings()
     file_path = Path(settings.upload_dir) / f"{document_id}.pdf"

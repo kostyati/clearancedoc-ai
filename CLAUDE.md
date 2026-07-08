@@ -89,7 +89,7 @@ clearancedoc-ai/
 ### Week 1 — Backend
 - Day 1: Project setup, Docker skeleton, FastAPI health endpoint ✅ DONE
 - Day 2: PDF processing (PyMuPDF + OCR fallback) ✅ DONE
-- Day 3: Chunking + embedding + ChromaDB storage
+- Day 3: Chunking + embedding + ChromaDB storage ✅ DONE
 - Day 4: RAG retrieval + LLM generation with citations
 - Day 5: Polish API endpoints, error handling
 
@@ -124,4 +124,4 @@ First launch shows a model settings screen:
 - Commit messages should be descriptive, not "update files"
 
 ## Current status
-Day 2 complete. `services/pdf_processor.py` extracts text per-page via PyMuPDF and falls back to Tesseract OCR (rendering the page to an image) when a page has under 20 characters of native text. `routers/documents.py` wires this into `POST /documents`: saves the upload to `settings.upload_dir`, extracts text, and returns `status=ready` with `page_count`, or `status=error` for corrupted/unreadable PDFs. Documents and extracted page text are held in an in-memory dict for now — TODO(Day 3): replace with ChromaDB-backed storage after chunking/embedding. Tests in `tests/test_pdf_processor.py` cover native-text extraction, corrupted files, and the OCR fallback path.
+Day 3 complete. `services/chunker.py` splits each page's text into overlapping token windows (`chunk_size`/`chunk_overlap` from `config.py`, default 512/50) using the `all-MiniLM-L6-v2` tokenizer; chunks never span page boundaries so each one carries a single citable page number. `services/embedder.py` embeds chunk text locally via `sentence-transformers` (`all-MiniLM-L6-v2`). `services/retriever.py` wraps a persistent ChromaDB collection (`config.chroma_persist_dir`) with `add_chunks`, `query` (optionally scoped to `document_ids`), and `delete_document`. `routers/documents.py` wires these together: `POST /documents` now chunks, embeds, and stores each upload's text in ChromaDB instead of an in-memory dict, and `DELETE /documents/{id}` also purges the document's chunks from ChromaDB. Document *metadata* (id, filename, status) is still an in-memory dict — TODO(Day 4): move to persistent storage alongside wiring up retrieval + LLM generation with citations in `rag_pipeline.py`/`generator.py`. Tests: `tests/test_chunker.py`, `tests/test_embedder.py`, `tests/test_retriever.py` (unit), `tests/test_documents.py` (end-to-end upload/list/delete through the real chunk→embed→ChromaDB pipeline).
