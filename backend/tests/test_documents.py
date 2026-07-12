@@ -10,9 +10,10 @@ from config import get_settings
 
 @pytest.fixture(autouse=True)
 def _isolated_storage(tmp_path, monkeypatch):
-    """Point uploads and ChromaDB at fresh temp dirs and reset cached clients."""
+    """Point uploads, ChromaDB, and the metadata DB at fresh temp paths and reset cached clients."""
     monkeypatch.setenv("CLEARANCEDOC_UPLOAD_DIR", str(tmp_path / "uploads"))
     monkeypatch.setenv("CLEARANCEDOC_CHROMA_PERSIST_DIR", str(tmp_path / "chroma"))
+    monkeypatch.setenv("CLEARANCEDOC_DB_PATH", str(tmp_path / "clearancedoc.db"))
     get_settings.cache_clear()
     retriever._client = None
     yield
@@ -23,9 +24,7 @@ def _isolated_storage(tmp_path, monkeypatch):
 @pytest.fixture
 def client():
     from main import app
-    from routers.documents import _documents
 
-    _documents.clear()
     return TestClient(app)
 
 

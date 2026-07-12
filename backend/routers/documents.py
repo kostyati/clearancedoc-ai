@@ -8,15 +8,12 @@ from fastapi import APIRouter, HTTPException, UploadFile
 
 from config import get_settings
 from models.schemas import DocumentResponse, DocumentStatus
-from services import retriever
+from services import document_store, retriever
 from services.chunker import chunk_pages
 from services.embedder import embed_texts
 from services.pdf_processor import PDFProcessingError, extract_text
 
 router = APIRouter(prefix="/documents", tags=["documents"])
-
-# TODO(Day 4): replace this in-memory store with a persistent metadata store.
-_documents: dict[str, DocumentResponse] = {}
 
 
 @router.post("", response_model=DocumentResponse)
@@ -46,7 +43,7 @@ async def upload_document(file: UploadFile) -> DocumentResponse:
             page_count=None,
             uploaded_at=datetime.now(timezone.utc),
         )
-        _documents[document_id] = document
+        document_store.save(document)
         return document
 
     chunks = chunk_pages(processed.pages, settings.chunk_size, settings.chunk_overlap)
@@ -60,20 +57,20 @@ async def upload_document(file: UploadFile) -> DocumentResponse:
         page_count=processed.page_count,
         uploaded_at=datetime.now(timezone.utc),
     )
-    _documents[document_id] = document
+    document_store.save(document)
     return document
 
 
 @router.get("", response_model=list[DocumentResponse])
 async def list_documents() -> list[DocumentResponse]:
     """List all uploaded documents."""
-    return list(_documents.values())
+    return document_store.list_all()
 
 
 @router.delete("/{document_id}")
 async def delete_document(document_id: str) -> dict[str, str]:
     """Delete a document, its ChromaDB chunks, and its file on disk."""
-    _documents.pop(document_id, None)
+    document_store.delete(document_id)
     retriever.delete_document(document_id)
 
     settings = get_settings()
