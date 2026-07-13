@@ -9,7 +9,9 @@ from services.retriever import RetrievedChunk
 
 
 @pytest.fixture(autouse=True)
-def _reset_settings():
+def _reset_settings(tmp_path, monkeypatch):
+    monkeypatch.setenv("CLEARANCEDOC_DB_PATH", str(tmp_path / "clearancedoc.db"))
+    get_settings.cache_clear()
     yield
     get_settings.cache_clear()
 

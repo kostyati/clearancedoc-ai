@@ -85,6 +85,26 @@ def test_list_documents_includes_uploaded_document(client):
     assert any(doc["id"] == document_id for doc in list_response.json())
 
 
+def test_delete_document_returns_404_for_unknown_id(client):
+    response = client.delete("/documents/does-not-exist")
+    assert response.status_code == 404
+
+
+def test_upload_marks_document_error_on_unexpected_processing_failure(client, monkeypatch):
+    def broken_chunk_pages(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("routers.documents.chunk_pages", broken_chunk_pages)
+
+    response = client.post(
+        "/documents",
+        files={"file": ("test.pdf", _make_pdf_bytes(), "application/pdf")},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "error"
+
+
 def test_delete_document_removes_it_and_its_chunks(client):
     upload_response = client.post(
         "/documents",

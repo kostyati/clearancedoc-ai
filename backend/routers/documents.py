@@ -46,9 +46,20 @@ async def upload_document(file: UploadFile) -> DocumentResponse:
         document_store.save(document)
         return document
 
-    chunks = chunk_pages(processed.pages, settings.chunk_size, settings.chunk_overlap)
-    embeddings = embed_texts([chunk.text for chunk in chunks])
-    retriever.add_chunks(document_id, chunks, embeddings)
+    try:
+        chunks = chunk_pages(processed.pages, settings.chunk_size, settings.chunk_overlap)
+        embeddings = embed_texts([chunk.text for chunk in chunks])
+        retriever.add_chunks(document_id, chunks, embeddings)
+    except Exception:
+        document = DocumentResponse(
+            id=document_id,
+            filename=file.filename or "unknown.pdf",
+            status=DocumentStatus.ERROR,
+            page_count=processed.page_count,
+            uploaded_at=datetime.now(timezone.utc),
+        )
+        document_store.save(document)
+        return document
 
     document = DocumentResponse(
         id=document_id,
@@ -70,6 +81,9 @@ async def list_documents() -> list[DocumentResponse]:
 @router.delete("/{document_id}")
 async def delete_document(document_id: str) -> dict[str, str]:
     """Delete a document, its ChromaDB chunks, and its file on disk."""
+    if document_store.get(document_id) is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+
     document_store.delete(document_id)
     retriever.delete_document(document_id)
 

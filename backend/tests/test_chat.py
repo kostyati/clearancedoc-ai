@@ -1,8 +1,11 @@
 """Tests for the /chat endpoint."""
 
+from datetime import datetime, timezone
+
+import pytest
 from fastapi.testclient import TestClient
 
-from models.schemas import ChatResponse, Citation
+from models.schemas import ChatResponse, Citation, DocumentResponse, DocumentStatus
 from services.generator import GenerationError
 
 
@@ -10,6 +13,25 @@ def _client() -> TestClient:
     from main import app
 
     return TestClient(app)
+
+
+def _known_document(document_id: str = "doc-1") -> DocumentResponse:
+    return DocumentResponse(
+        id=document_id,
+        filename="test.pdf",
+        status=DocumentStatus.READY,
+        page_count=3,
+        uploaded_at=datetime.now(timezone.utc),
+    )
+
+
+@pytest.fixture(autouse=True)
+def _stub_document_lookup(monkeypatch):
+    """Most tests assume `document_ids` refer to known documents unless overridden."""
+    monkeypatch.setattr(
+        "routers.chat.document_store.get",
+        lambda document_id: _known_document(document_id),
+    )
 
 
 def test_ask_question_returns_answer_with_citations(monkeypatch):
@@ -38,3 +60,23 @@ def test_ask_question_returns_502_on_generation_error(monkeypatch):
     response = _client().post("/chat", json={"document_ids": ["doc-1"], "question": "How long?"})
 
     assert response.status_code == 502
+
+
+def test_ask_question_rejects_empty_question():
+    response = _client().post("/chat", json={"document_ids": ["doc-1"], "question": "   "})
+
+    assert response.status_code == 400
+
+
+def test_ask_question_rejects_empty_document_ids():
+    response = _client().post("/chat", json={"document_ids": [], "question": "How long?"})
+
+    assert response.status_code == 400
+
+
+def test_ask_question_rejects_unknown_document_id(monkeypatch):
+    monkeypatch.setattr("routers.chat.document_store.get", lambda document_id: None)
+
+    response = _client().post("/chat", json={"document_ids": ["doc-missing"], "question": "How long?"})
+
+    assert response.status_code == 404

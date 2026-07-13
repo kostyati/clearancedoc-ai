@@ -69,6 +69,16 @@ def save(document: DocumentResponse) -> None:
         )
 
 
+def get(document_id: str) -> DocumentResponse | None:
+    """Return a single document's metadata, or None if it doesn't exist."""
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT id, filename, status, page_count, uploaded_at FROM documents WHERE id = ?",
+            (document_id,),
+        ).fetchone()
+    return _row_to_document(row) if row is not None else None
+
+
 def list_all() -> list[DocumentResponse]:
     """Return metadata for every stored document."""
     with _connect() as conn:
